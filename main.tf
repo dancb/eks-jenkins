@@ -13,23 +13,16 @@ resource "aws_vpc" "main" {
   }
 }
 
-data "aws_availability_zones" "available" {
-  state = "available"
-}
+data "aws_availability_zones" "available" {}
 
 resource "aws_subnet" "private" {
   count                   = 2
-  cidr_block              = var.subnet_cidrs[count.index]
+  cidr_block              = var.private_subnet_cidrs[count.index]
   vpc_id                  = aws_vpc.main.id
   map_public_ip_on_launch = false
   availability_zone       = data.aws_availability_zones.available.names[count.index]
-
   tags = {
-    Name                                     = "${var.cluster_name}-private-subnet-${count.index + 1}"
-    Environment                              = "production"
-    Type                                     = "private"
-    "kubernetes.io/role/internal-elb"        = "1"
-    "kubernetes.io/cluster/${var.cluster_name}" = "owned"
+    Name = "${var.cluster_name}-private-subnet-${count.index + 1}"
   }
 }
 
@@ -39,17 +32,12 @@ resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.main.id
   map_public_ip_on_launch = true
   availability_zone       = data.aws_availability_zones.available.names[count.index]
-
   tags = {
-    Name                                     = "${var.cluster_name}-public-subnet-${count.index + 1}"
-    Environment                              = "production"
-    Type                                     = "public"
-    "kubernetes.io/role/elb"                 = "1"
-    "kubernetes.io/cluster/${var.cluster_name}" = "owned"
+    Name = "${var.cluster_name}-public-subnet-${count.index + 1}"
   }
 }
 
-# Internet Gateway y NAT
+# Internet Gateway y NAT Gateway
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main.id
 }
@@ -64,27 +52,11 @@ resource "aws_nat_gateway" "nat" {
 }
 
 # Rutas
-resource "aws_route_table" "private" {
-  vpc_id = aws_vpc.main.id
-}
-
-resource "aws_route" "private_route_nat" {
-  route_table_id         = aws_route_table.private.id
-  destination_cidr_block = "0.0.0.0/0"
-  nat_gateway_id         = aws_nat_gateway.nat.id
-}
-
-resource "aws_route_table_association" "private_assoc" {
-  count          = 2
-  subnet_id      = aws_subnet.private[count.index].id
-  route_table_id = aws_route_table.private.id
-}
-
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
 }
 
-resource "aws_route" "public_route_igw" {
+resource "aws_route" "public_route" {
   route_table_id         = aws_route_table.public.id
   destination_cidr_block = "0.0.0.0/0"
   gateway_id             = aws_internet_gateway.igw.id
@@ -96,22 +68,29 @@ resource "aws_route_table_association" "public_assoc" {
   route_table_id = aws_route_table.public.id
 }
 
-# Security Group para ALB
+resource "aws_route_table" "private" {
+  vpc_id = aws_vpc.main.id
+}
+
+resource "aws_route" "private_route" {
+  route_table_id         = aws_route_table.private.id
+  destination_cidr_block = "0.0.0.0/0"
+  nat_gateway_id         = aws_nat_gateway.nat.id
+}
+
+resource "aws_route_table_association" "private_assoc" {
+  count          = 2
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.private.id
+}
+
+# ALB Security Group
 resource "aws_security_group" "alb_sg" {
-  name        = "${var.cluster_name}-alb-sg"
-  description = "Security group for ALB"
-  vpc_id      = aws_vpc.main.id
+  vpc_id = aws_vpc.main.id
 
   ingress {
     from_port   = 80
     to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    from_port   = 443
-    to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -122,20 +101,14 @@ resource "aws_security_group" "alb_sg" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
-  tags = {
-    Name = "${var.cluster_name}-alb-sg"
-  }
 }
 
+# ALB
 resource "aws_lb" "alb" {
   name               = "${var.cluster_name}-alb"
-  internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_sg.id]
-  subnets            = [aws_subnet.public[0].id, aws_subnet.public[1].id]
-
-  enable_deletion_protection = false
+  subnets            = aws_subnet.public[*].id
 
   tags = {
     Name = "${var.cluster_name}-alb"
@@ -144,7 +117,7 @@ resource "aws_lb" "alb" {
 
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.alb.arn
-  port              = "80"
+  port              = 80
   protocol          = "HTTP"
 
   default_action {
@@ -157,7 +130,7 @@ resource "aws_lb_listener" "http" {
   }
 }
 
-# IAM Roles para el EKS y Nodos
+# IAM Role para EKS y Nodo
 resource "aws_iam_role" "eks_cluster_role" {
   name = "${var.cluster_name}-eks-role"
   assume_role_policy = jsonencode({
@@ -170,10 +143,21 @@ resource "aws_iam_role" "eks_cluster_role" {
   })
 }
 
-resource "aws_iam_role_policy_attachment" "eks_cluster_AmazonEKSClusterPolicy" {
+resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
   role       = aws_iam_role.eks_cluster_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
 }
+
+resource "aws_iam_role_policy_attachment" "eks_service_policy" {
+  role       = aws_iam_role.eks_cluster_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSServicePolicy"
+}
+
+resource "aws_iam_role_policy_attachment" "eks_vpc_controller" {
+  role       = aws_iam_role.eks_cluster_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSVPCResourceController"
+}
+
 
 resource "aws_iam_role" "node_role" {
   name = "${var.cluster_name}-node-role"
@@ -187,17 +171,17 @@ resource "aws_iam_role" "node_role" {
   })
 }
 
-resource "aws_iam_role_policy_attachment" "node_AmazonEKSWorkerNodePolicy" {
+resource "aws_iam_role_policy_attachment" "node_policies" {
   role       = aws_iam_role.node_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
 }
 
-resource "aws_iam_role_policy_attachment" "node_AmazonEC2ContainerRegistryReadOnly" {
+resource "aws_iam_role_policy_attachment" "node_ec2_ecr" {
   role       = aws_iam_role.node_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
 
-resource "aws_iam_role_policy_attachment" "node_SSM_Policy" {
+resource "aws_iam_role_policy_attachment" "node_ssm" {
   role       = aws_iam_role.node_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
@@ -205,6 +189,11 @@ resource "aws_iam_role_policy_attachment" "node_SSM_Policy" {
 resource "aws_iam_instance_profile" "node_profile" {
   name = "${var.cluster_name}-node-profile"
   role = aws_iam_role.node_role.name
+}
+
+resource "aws_iam_role_policy_attachment" "node_cni_policy" {
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+  role       = aws_iam_role.node_role.name
 }
 
 # Clúster EKS
@@ -218,11 +207,13 @@ resource "aws_eks_cluster" "eks_cluster" {
   }
 
   depends_on = [
-    aws_iam_role_policy_attachment.eks_cluster_AmazonEKSClusterPolicy
+    aws_iam_role_policy_attachment.eks_service_policy,
+    aws_iam_role_policy_attachment.eks_cluster_policy,
+    aws_iam_role_policy_attachment.eks_vpc_controller,
   ]
 }
 
-# Node Group de EKS
+# EKS Node Group
 resource "aws_eks_node_group" "eks_node_group" {
   cluster_name    = aws_eks_cluster.eks_cluster.name
   node_group_name = "${var.cluster_name}-node-group"
@@ -236,106 +227,41 @@ resource "aws_eks_node_group" "eks_node_group" {
   }
 
   instance_types = [var.node_instance_type]
-  ami_type       = "AL2_x86_64"  # AMI predeterminada de Amazon Linux 2
-  disk_size      = var.volume_size  # Tamaño del disco para los nodos
-
-  depends_on = [
-    aws_eks_cluster.eks_cluster,
-    aws_iam_role_policy_attachment.node_AmazonEKSWorkerNodePolicy,
-    aws_iam_role_policy_attachment.node_AmazonEC2ContainerRegistryReadOnly,
-    aws_iam_role_policy_attachment.node_SSM_Policy,
-    aws_iam_openid_connect_provider.eks_oidc_provider
-  ]
+  disk_size      = var.volume_size  # Tamaño del disco en GB
 
   tags = {
     Name = "${var.cluster_name}-node-group"
   }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.node_policies,
+    aws_iam_role_policy_attachment.node_cni_policy,
+    aws_iam_role_policy_attachment.node_ec2_ecr,
+    aws_iam_role_policy_attachment.node_ssm,
+  ]
 }
 
-# Security Group para el Clúster EKS
+# EKS Cluster Security Group
 resource "aws_security_group" "eks_cluster_sg" {
-  name        = "${var.cluster_name}-eks-cluster-sg"
-  description = "Security group for EKS control plane"
-  vpc_id      = aws_vpc.main.id
+  vpc_id = aws_vpc.main.id
+
+  ingress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"        # Protocolo -1 permite todo
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all inbound traffic"
+  }
 
   egress {
     from_port   = 0
     to_port     = 0
-    protocol    = "-1"
+    protocol    = "-1"        # Protocolo -1 permite todo
     cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound traffic"
   }
 
   tags = {
     Name = "${var.cluster_name}-eks-cluster-sg"
   }
 }
-
-# Security Group para los Nodos EKS
-resource "aws_security_group" "eks_node_sg" {
-  name        = "${var.cluster_name}-eks-node-sg"
-  description = "Security group for EKS worker nodes"
-  vpc_id      = aws_vpc.main.id
-
-  egress {
-    description = "Allow nodes to access the Internet"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "${var.cluster_name}-eks-node-sg"
-  }
-}
-
-# Permitir que los nodos se comuniquen con el plano de control (Puerto 443)
-resource "aws_security_group_rule" "eks_cluster_ingress_from_nodes" {
-  description              = "Allow worker nodes to communicate with the cluster API Server"
-  type                     = "ingress"
-  from_port                = 443
-  to_port                  = 443
-  protocol                 = "tcp"
-  security_group_id        = aws_security_group.eks_cluster_sg.id
-  source_security_group_id = aws_security_group.eks_node_sg.id
-}
-
-# Permitir que el plano de control se comunique con los nodos (Puertos 1025-65535)
-resource "aws_security_group_rule" "eks_nodes_ingress_from_cluster" {
-  description              = "Allow control plane to communicate with nodes"
-  type                     = "ingress"
-  from_port                = 1025
-  to_port                  = 65535
-  protocol                 = "tcp"
-  security_group_id        = aws_security_group.eks_node_sg.id
-  source_security_group_id = aws_security_group.eks_cluster_sg.id
-}
-
-# Permitir que los nodos se comuniquen entre sí
-resource "aws_security_group_rule" "eks_nodes_ingress_self" {
-  description       = "Allow nodes to communicate with each other"
-  type              = "ingress"
-  from_port         = 0
-  to_port           = 65535
-  protocol          = "tcp"
-  security_group_id = aws_security_group.eks_node_sg.id
-  self              = true
-}
-
-
-# Proveedor OIDC para el Clúster EKS
-data "aws_eks_cluster" "eks_cluster" {
-  name = aws_eks_cluster.eks_cluster.name
-
-  depends_on = [aws_eks_cluster.eks_cluster]
-}
-
-resource "aws_iam_openid_connect_provider" "eks_oidc_provider" {
-  url             = aws_eks_cluster.eks_cluster.identity[0].oidc[0].issuer
-  client_id_list  = ["sts.amazonaws.com"]
-  thumbprint_list = ["9e99a48a9960b14926bb7f3b6e011e3b7b1fd41c"]
-}
-
-
-
-# TODO: ahora instalar jenkins: https://chatgpt.com/share/670da2a8-827c-800a-9ade-6fcbaf67eec1
