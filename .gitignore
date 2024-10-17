@@ -1,0 +1,5 @@
+# Ignorar la carpeta .terraform
+.terraform/
+
+# Ignorar archivos que contengan la palabra terraform.tfstate
+*terraform.tfstate*
