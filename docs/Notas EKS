@@ -1,96 +1,5 @@
-Acess Key: AKIAUND45NE5242A2HKE
-Secret key: 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
-
-Este usuario esta asociado al cluster (mywizard)
 Acces Key (mywizard): AKIAUND45NE57MU3BIVU
 Secret key (mywizard): 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
-
-#################################################################################
-################## AHORA VIENE CONFIG EXCLUSIVA PARA ALB CONTROLLER #############
-#################################################################################
-
-- Actualizar kubeconfig para conectarse al cluster
-    aws eks --region us-east-1 update-kubeconfig --name eks-cluster-jenkins
-
-- Crear namespace para backstage
-    kubectl create namespace ops
-
-- Sino se puede acceder porque dice un mensaje como "You must be logged in to the server (Unauthorized)" es porque se debe agregar via CLI o Consola al usuario con el cual se quiere acceder a administra
-los objetos Kubernetes (IAM access entries), en este caso agregué al usuario mywizard.
-
-- Crear permisos para ALB (policy)
-    aws iam create-policy --policy-name AWSLoadBalancerControllerIAMPolicy --policy-document file://iam_policy.json
-
-- Crear el rol de IAM para el Service Account
-Opcion 1: 
-    aws iam create-role --role-name ALBIngressControllerRole  --assume-role-policy-document file://json/trust-policy.json
-    aws iam update-assume-role-policy --role-name ALBIngressControllerRole --policy-document file://trust-policy.json
-
-
-Opcion 2
-    aws iam create-role \
-        --role-name AWSLoadBalancerControllerIAMRole \
-        --assume-role-policy-document file://<(echo '{
-        "Version": "2012-10-17",
-        "Statement": [
-            {
-            "Effect": "Allow",
-            "Principal": {
-                "Service": "eks.amazonaws.com"
-            },
-            "Action": "sts:AssumeRole"
-            }
-        ]
-        }')
-
-- Asociar la política al rol
-    aws iam attach-role-policy --role-name ALBIngressControllerRole --policy-arn arn:aws:iam::303057168699:policy/AWSLoadBalancerControllerIAMPolicy
-    aws iam attach-role-policy --role-name ALBIngressControllerRole --policy-arn arn:aws:iam::303057168699:policy/CustomLoadBalancerControllerPolicy
-
-    * Verificar que el rol del eks tiene esa politica asociada (no es necesario que esa politica se atache al rol del EKS ya que tienes permisos para la 
-    gestion del ALB Ingress solamente (BORRAR CUANDO TODO ESTE FUNCIONANDO))
-
-- Crea el serviceaccount
-    kubectl apply -f serviceaccount-v2.yaml
-
-- Instala el controlador de Ingress (ALB Ingress Controller)
-    helm repo add eks https://aws.github.io/eks-charts
-    helm repo update
-
-    helm install aws-load-balancer-controller eks/aws-load-balancer-controller -n kube-system --set clusterName=eks-cluster-jenkins --set serviceAccount.create=false --set serviceAccount.name=aws-load-balancer-controller --set vpcId=vpc-063fbde164c26ff35
-
-    * El VPC-ID se puede obtener asi: aws eks describe-cluster --name eks-cluster-jenkins --query "cluster.resourcesVpcConfig.vpcId" --output text
-
-        - Si es necesario se puede re-instalar
-        helm upgrade aws-load-balancer-controller eks/aws-load-balancer-controller -n kube-system --set clusterName=eks-cluster-jenkins --set serviceAccount.create=false --set serviceAccount.name=aws-load-balancer-controller
-
-        - Eliminarlo si es necesario
-        helm uninstall aws-load-balancer-controller -n kube-system
-
-        - Si sigue fallando es probable que el controlador no pueda obtener el VPCid desde la metada de las ec2. COnfig manual:
-        aws eks describe-cluster --name eks-cluster-jenkins --query "cluster.resourcesVpcConfig.vpcId" --output text
-
-        - Reinstalar con el vpcid
-        helm upgrade aws-load-balancer-controller eks/aws-load-balancer-controller -n kube-system --set clusterName=eks-cluster-jenkins --set serviceAccount.create=false --set serviceAccount.name=aws-load-balancer-controller --set vpcId=vpc-062febe72f3049306
-
-        - Si aparecen 2 pods en running, puede ser porque el deployment tiene 2 replicas, validarlo asi:
-        kubectl get deployment aws-load-balancer-controller -n kube-system
-
-- Verifica los detalles del Service Account para ver su configuración de IAM
-    kubectl describe serviceaccount aws-load-balancer-controller -n kube-system
-
-- Lista service accounts
-    kubectl get serviceaccount -n kube-system
-
-- Verifica que el controlador quedo ok
-    kubectl get pods -n kube-system
-
-- Troubleshoot en caso del controller
-    kubectl logs -n kube-system deployment/aws-load-balancer-controller
-
-- Verificar proveedor OIDC
-    aws eks describe-cluster --name eks-cluster-jenkins --query "cluster.identity.oidc.issuer" --output text
-
 
 ####################################################################################
 ################## AHORA VIENE CONFIG EXCLUSIVA PARA ALB CONTROLLER V2 #############
@@ -139,7 +48,7 @@ Opcion 2
     
     7.3 Instala nginx y valida que puedas llegar
 
-8- Prueba simple con un nginx (use esta guia de referencia: https://medium.com/@shivam77kushwah/integrate-application-load-balancer-with-aws-eks-using-aws-load-balancer-controller-7e9b7d178a79)
+8- Prueba simple instalando pod con un nginx (use esta guia de referencia: https://medium.com/@shivam77kushwah/integrate-application-load-balancer-with-aws-eks-using-aws-load-balancer-controller-7e9b7d178a79)
     8.1- Aplica el deployment de nginx
         kubectl apply -f nginx-deployment.yaml
 
@@ -154,59 +63,3 @@ Opcion 2
     
     8.5- Eliminar service en caso que sea necesario:
         kubectl delete svc nginx-service
-
-
-#################################################################################
-################## AHORA VIENE CONFIG PARA VALIDAR QUE ESTA TODO OK #############
-#################################################################################
-
-- Aplicar el deployment de un nginx
-    kubectl apply -f nginx-deployment.yaml
-
-- Aplicar el service de tipo LoadBalancer
-    kubectl apply -f service.yaml
-
-- Verifica el ALB: Una vez desplegado, el ALB debería asignar una URL para acceder a Nginx. 
-    kubectl get svc nginx-service
-
-
-
-#################################################################################
-################## AHORA VIENE CONFIG EXCLUSIVA PARA BACKSTAGE ##################
-#################################################################################
-
-- Instala secreto para la pass de RDS
-    kubectl create secret generic backstage-db-secret --from-literal=POSTGRES_PASSWORD=strongpassword123 --namespace backstage
-
-- Instalar Backstage utilizando Helm (Agrega el repositorio Helm de Backstage)
-    - El oficial de backstage
-    helm repo add backstage https://backstage.github.io/charts
-    helm repo update
-
-- Instalar Backstage en el clúster EKS usando Helm:
-    helm install backstage backstage/backstage --namespace backstage -f configs/values.yaml
-
-    - Verificar valores del chart (si es necesario)
-    helm show values backstage/backstage
-
-    - Validar instalacion de pod
-    kubectl get pods -n backstage
-
-    - DNS ingress
-    kubectl get ingress -n backstage
-
-
-    - Si es necesario, forzar el uso de la imagen correcta
-    helm upgrade backstage backstage/backstage --namespace backstage -f configs/values.yaml --set image.repository="backstage/backstage" --set image.tag="latest"
-
-- Verifica el estado de backstage
-    kubectl get pods -n backstage
-
-- Obtener IP o DNS del LoadBalancer
-    kubectl get svc -n backstage
-
-- Verificar logs del pod
-    kubectl logs backstage-7759647789-frd7v -n backstage
-
-- Usa el siguiente comando para descargar el chart de Backstage:
-helm pull backstage/backstage --untar
