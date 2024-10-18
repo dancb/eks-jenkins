@@ -22,7 +22,9 @@ resource "aws_subnet" "private" {
   map_public_ip_on_launch = false
   availability_zone       = data.aws_availability_zones.available.names[count.index]
   tags = {
-    Name = "${var.cluster_name}-private-subnet-${count.index + 1}"
+    Name                                   = "${var.cluster_name}-private-subnet-${count.index + 1}"
+    "kubernetes.io/role/internal-elb"      = "1"  # Tag para subnets privadas
+    "kubernetes.io/cluster/${var.cluster_name}" = "owned"
   }
 }
 
@@ -33,9 +35,12 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
   availability_zone       = data.aws_availability_zones.available.names[count.index]
   tags = {
-    Name = "${var.cluster_name}-public-subnet-${count.index + 1}"
+    Name                                 = "${var.cluster_name}-public-subnet-${count.index + 1}"
+    "kubernetes.io/role/elb"             = "1"  # Tag para subnets públicas
+    "kubernetes.io/cluster/${var.cluster_name}" = "owned"
   }
 }
+
 
 # Internet Gateway y NAT Gateway
 resource "aws_internet_gateway" "igw" {
@@ -84,51 +89,51 @@ resource "aws_route_table_association" "private_assoc" {
   route_table_id = aws_route_table.private.id
 }
 
-# ALB Security Group
-resource "aws_security_group" "alb_sg" {
-  vpc_id = aws_vpc.main.id
+# # ALB Security Group
+# resource "aws_security_group" "alb_sg" {
+#   vpc_id = aws_vpc.main.id
 
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+#   ingress {
+#     from_port   = 80
+#     to_port     = 80
+#     protocol    = "tcp"
+#     cidr_blocks = ["0.0.0.0/0"]
+#   }
 
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-}
+#   egress {
+#     from_port   = 0
+#     to_port     = 0
+#     protocol    = "-1"
+#     cidr_blocks = ["0.0.0.0/0"]
+#   }
+# }
 
-# ALB
-resource "aws_lb" "alb" {
-  name               = "${var.cluster_name}-alb"
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb_sg.id]
-  subnets            = aws_subnet.public[*].id
+# # ALB
+# resource "aws_lb" "alb" {
+#   name               = "${var.cluster_name}-alb"
+#   load_balancer_type = "application"
+#   security_groups    = [aws_security_group.alb_sg.id]
+#   subnets            = aws_subnet.public[*].id
 
-  tags = {
-    Name = "${var.cluster_name}-alb"
-  }
-}
+#   tags = {
+#     Name = "${var.cluster_name}-alb"
+#   }
+# }
 
-resource "aws_lb_listener" "http" {
-  load_balancer_arn = aws_lb.alb.arn
-  port              = 80
-  protocol          = "HTTP"
+# resource "aws_lb_listener" "http" {
+#   load_balancer_arn = aws_lb.alb.arn
+#   port              = 80
+#   protocol          = "HTTP"
 
-  default_action {
-    type = "fixed-response"
-    fixed_response {
-      content_type = "text/plain"
-      message_body = "ALB listener response"
-      status_code  = "200"
-    }
-  }
-}
+#   default_action {
+#     type = "fixed-response"
+#     fixed_response {
+#       content_type = "text/plain"
+#       message_body = "ALB listener response"
+#       status_code  = "200"
+#     }
+#   }
+# }
 
 # IAM Role para EKS y Nodo
 resource "aws_iam_role" "eks_cluster_role" {
