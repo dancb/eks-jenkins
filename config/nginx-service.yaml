@@ -9,4 +9,4 @@ spec:
   - port: 80
     protocol: TCP
   selector:
-    run: nginx
+    app: nginx
