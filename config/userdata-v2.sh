@@ -32,16 +32,6 @@ $BIN_DIR/aws configure set aws_access_key_id AKIAUND45NE57MU3BIVU
 $BIN_DIR/aws configure set aws_secret_access_key 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
 $BIN_DIR/aws configure set default.region us-east-1
 
-# Verificar la configuración mediante una acción
-echo "Listando buckets de S3 para verificar credenciales..." >> $LOG_FILE
-$BIN_DIR/aws s3 ls >> $LOG_FILE 2>&1
-
-if [ $? -eq 0 ]; then
-    echo "Configuración de AWS CLI verificada correctamente mediante acceso a S3" >> $LOG_FILE
-else
-    echo "Error en la verificación de configuración de AWS CLI" >> $LOG_FILE
-fi
-
 # Instalar kubectl
 echo "Instalando kubectl..." >> $LOG_FILE
 log_command curl -o "$DOWNLOAD_DIR/kubectl" -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
@@ -61,7 +51,7 @@ echo "Instalando eksctl..." >> $LOG_FILE
 log_command curl --silent --location "https://github.com/weaveworks/eksctl/releases/download/latest_release/eksctl_$(uname -s)_amd64.tar.gz" | sudo tar xz -C $BIN_DIR
 
 # Mensaje de finalización
-echo "Instalación completada. Revise el archivo de log en $LOG_FILE para los detalles."
+echo "Instalación de herramientas operativas completada. Revise el archivo de log en $LOG_FILE para los detalles."
 
 # Verificar instalación:
 # aws --version

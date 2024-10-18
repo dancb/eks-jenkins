@@ -2,7 +2,7 @@ Acces Key (mywizard): AKIAUND45NE57MU3BIVU
 Secret key (mywizard): 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
 
 ####################################################################################
-################## AHORA VIENE CONFIG EXCLUSIVA PARA ALB CONTROLLER V2 #############
+################## AHORA VIENE CONFIG EXCLUSIVA PARA ALB CONTROLLER ################
 ####################################################################################
 
 1- Configurar OIDC Provider: Asegúrate de que tu clúster tenga un proveedor OIDC habilitado:
@@ -63,3 +63,14 @@ Secret key (mywizard): m2ahXw2Ky7TRMMNEvU5Tz6lqARFjuCtqFaiDJwDZ
     
     8.5- Eliminar service en caso que sea necesario:
         kubectl delete svc nginx-service
+
+    8.6- Una vez validado, hacer lo mismo pero con los archivos de jenkins-* (peudes eliminar los objetos K8S de nginx o probar con el main ingress)
+
+
+####################################################################################
+################## AHORA VIENE CONFIG EXCLUSIVA PARA JENKINS #######################
+####################################################################################
+
+9- Una vez instalado el pod de jenkins, el service y el ingress, entrar al pod y obtener la password que pide la 
+primera vez que se accede a la URL del ALB que nos lleva a Jenkins.
+    kubectl exec --namespace ops -it <nombre pod jenkins>  -- cat /var/jenkins_home/secrets/initialAdminPassword
