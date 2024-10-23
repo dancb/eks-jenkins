@@ -56,14 +56,8 @@ Secret key (mywizard): m2ahXw2Ky7TRMMNEvU5Tz6lqARFjuCtqFaiDJwDZ
         --set region=us-east-1 \
         --set vpcId=vpc-0e0b2b8f5ef39c553
 
-    6.3- Instalar controlador con Helm (Opcional):
-        helm install aws-load-balancer-controller eks/aws-load-balancer-controller -n kube-system --set clusterName=eks-cluster-ssm --set serviceAccount.create=false --set serviceAccount.name=aws-load-balancer-controller --set vpcId=vpc-0e0b2b8f5ef39c553
-
         Reinstalar con el vpcid (opcional)
         helm upgrade aws-load-balancer-controller eks/aws-load-balancer-controller -n kube-system --set clusterName=eks-cluster-jenkins --set serviceAccount.create=false --set serviceAccount.name=aws-load-balancer-controller --set vpcId=vpc-062febe72f3049306
-
-        El VPC-ID se puede obtener asi: 
-        aws eks describe-cluster --name eks-cluster-jenkins --query "cluster.resourcesVpcConfig.vpcId" --output text
 
 6- Validacion 
     6.1- Verifica los Pods y Deployments: Usa el siguiente comando para comprobar que el deployment del controlador esté activo y que los pods estén corriendo:
