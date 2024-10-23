@@ -17,7 +17,7 @@ Secret key (mywizard): m2ahXw2Ky7TRMMNEvU5Tz6lqARFjuCtqFaiDJwDZ
         aws iam create-policy --policy-name AWSLoadBalancerControllerIAMPolicy --policy-document file://iam_policy.json
         aws iam create-policy --policy-name CustomLoadBalancerControllerPolicy --policy-document file://iam_policy_custom.json
 
-    2.2 Crea Rol:
+    2.2 Crea Rol. ASEGURATE de que el archivo trust-policy.json lleve el ID del OpenID Provider tu cluster:
         aws iam create-role --role-name ALBIngressControllerRole  --assume-role-policy-document file://trust-policy.json
         aws iam update-assume-role-policy --role-name ALBIngressControllerRole --policy-document file://trust-policy.json
 
@@ -54,7 +54,7 @@ Secret key (mywizard): m2ahXw2Ky7TRMMNEvU5Tz6lqARFjuCtqFaiDJwDZ
         --set serviceAccount.create=false \
         --set serviceAccount.name=aws-load-balancer-controller \
         --set region=us-east-1 \
-        --set vpcId=vpc-0e0b2b8f5ef39c553
+        --set vpcId=vpc-01c484466c241cca8
 
         Reinstalar con el vpcid (opcional)
         helm upgrade aws-load-balancer-controller eks/aws-load-balancer-controller -n kube-system --set clusterName=eks-cluster-jenkins --set serviceAccount.create=false --set serviceAccount.name=aws-load-balancer-controller --set vpcId=vpc-062febe72f3049306
@@ -70,17 +70,27 @@ Secret key (mywizard): m2ahXw2Ky7TRMMNEvU5Tz6lqARFjuCtqFaiDJwDZ
     6.3 Instala nginx y valida que puedas llegar
 
 7- Prueba simple instalando pod con un nginx (use esta guia de referencia: https://medium.com/@shivam77kushwah/integrate-application-load-balancer-with-aws-eks-using-aws-load-balancer-controller-7e9b7d178a79)
-    7.1- Aplica el deployment de nginx
+    7.0- Crea namespace ops
+        kubectl create namespace ops
+    
+    7.1- Aplica el deployment
         kubectl apply -f nginx-deployment.yaml
+        kubectl apply -f jenkins-deployment.yaml
 
     78.2- Aplica el service
         kubectl apply -f nginx-service.yaml
+        kubectl apply -f jenkins-service.yaml
 
     7.3- Verifica que el servicio tiene external-ip asignada
         kubectl get svc nginx-service
+        kubectl get svc jenkins-service
 
     7.4- Crear ingress
         kubectl apply -f nginx-ingress.yaml
+        kubectl apply -f jenkins-ingress.yaml
+
+        * Si quiero usar un solo ingress para ambos servicios o más, puedo usar un main ingress como este:
+        kubectl apply -f main-ingress.yaml
     
     7.5- Eliminar service en caso que sea necesario:
         kubectl delete svc nginx-service
@@ -95,5 +105,13 @@ Secret key (mywizard): m2ahXw2Ky7TRMMNEvU5Tz6lqARFjuCtqFaiDJwDZ
 8- Una vez instalado el pod de jenkins, el service y el ingress, entrar al pod y obtener la password que pide la 
 primera vez que se accede a la URL del ALB que nos lleva a Jenkins.
     kubectl exec --namespace ops -it <nombre pod jenkins>  -- cat /var/jenkins_home/secrets/initialAdminPassword
+    kubectl exec --namespace ops -it jenkins-deployment-6856cb5d4b-8tc9b   -- cat /var/jenkins_home/secrets/initialAdminPassword
+    retorna algo como esto: d5995b45b9564998b211b68a9aa449e1
 
     - Todos los pasos y troubleshootings aqui: https://chatgpt.com/share/67156938-dc0c-800a-a430-255667bff521
+
+    - Para descargar archivos de repo privado:
+        curl -H "Authorization: token YOUR_GITHUB_TOKEN" -L -o generate_terraform_plan.sh https://github.com/dancb/iacost/raw/main/generate_terraform_plan.sh
+        curl -H "Authorization: token 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" -L -o generate_terraform_plan.sh https://github.com/dancb/iacost/raw/main/generate_terraform_plan.sh
+
+        
