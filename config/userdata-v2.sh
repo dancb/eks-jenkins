@@ -48,7 +48,9 @@ log_command sudo chmod +x $BIN_DIR/helm
 
 # Instalar eksctl
 echo "Instalando eksctl..." >> $LOG_FILE
-log_command curl --silent --location "https://github.com/weaveworks/eksctl/releases/download/latest_release/eksctl_$(uname -s)_amd64.tar.gz" | sudo tar xz -C $BIN_DIR
+curl --silent --location "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" --output /tmp/eksctl.tar.gz
+tar -xzf /tmp/eksctl.tar.gz -C /tmp
+sudo mv /tmp/eksctl /usr/local/bin
 
 # Mensaje de finalización
 echo "Instalación de herramientas operativas completada. Revise el archivo de log en $LOG_FILE para los detalles."
