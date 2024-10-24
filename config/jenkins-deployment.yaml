@@ -21,6 +21,9 @@ spec:
           ports:
             - containerPort: 8080
             - containerPort: 50000
+          securityContext:
+            runAsUser: 0  # Ejecutar como root
+            runAsGroup: 0  # Ejecutar en el grupo root
           volumeMounts:
             - name: jenkins-volume
               mountPath: /var/jenkins_home

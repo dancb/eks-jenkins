@@ -1,11 +1,13 @@
-Acces Key (mywizard): AKIAUND45NE57MU3BIVU
-Secret key (mywizard): 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
+AWS_ACCESS_KEY_ID (mywizard): AKIAUND45NE57MU3BIVU
+AWS_SECRET_ACCESS_KEY (mywizard): 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
+GITHUB_TOKEN (dancb): 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
 
 ####################################################################################
 ################## AHORA VIENE CONFIG EXCLUSIVA PARA ALB CONTROLLER ################
 ####################################################################################
 
 0- Configura el contexto:
+    aws configure
     eksctl utils write-kubeconfig --cluster eks-cluster-jenkins
 
 1- Configurar OIDC Provider: Asegúrate de que tu clúster tenga un proveedor OIDC habilitado:
@@ -27,7 +29,7 @@ Secret key (mywizard): m2ahXw2Ky7TRMMNEvU5Tz6lqARFjuCtqFaiDJwDZ
 
 3- Crear la IAM Role para el Service Account: Crea el Service Account con la IAM Role asociada:
     3.1- Crea el serviceaccount
-        kubectl apply -f configs/serviceaccount-v2.yaml
+        kubectl apply -f serviceaccount-v2.yaml
 
         Lista Serviceaccounts
         kubectl get serviceaccounts -n kube-system
@@ -82,8 +84,8 @@ Secret key (mywizard): m2ahXw2Ky7TRMMNEvU5Tz6lqARFjuCtqFaiDJwDZ
         kubectl apply -f jenkins-service.yaml
 
     7.3- Verifica que el servicio tiene external-ip asignada
-        kubectl get svc nginx-service
-        kubectl get svc jenkins-service
+        kubectl get svc nginx-service -n ops
+        kubectl get svc jenkins-service -n ops
 
     7.4- Crear ingress
         kubectl apply -f nginx-ingress.yaml
@@ -105,7 +107,7 @@ Secret key (mywizard): m2ahXw2Ky7TRMMNEvU5Tz6lqARFjuCtqFaiDJwDZ
 8- Una vez instalado el pod de jenkins, el service y el ingress, entrar al pod y obtener la password que pide la 
 primera vez que se accede a la URL del ALB que nos lleva a Jenkins.
     kubectl exec --namespace ops -it <nombre pod jenkins>  -- cat /var/jenkins_home/secrets/initialAdminPassword
-    kubectl exec --namespace ops -it jenkins-deployment-6856cb5d4b-8tc9b   -- cat /var/jenkins_home/secrets/initialAdminPassword
+    kubectl exec --namespace ops -it jenkins-deployment-d65664465-cn6qw   -- cat /var/jenkins_home/secrets/initialAdminPassword
     retorna algo como esto: d5995b45b9564998b211b68a9aa449e1
 
     - Todos los pasos y troubleshootings aqui: https://chatgpt.com/share/67156938-dc0c-800a-a430-255667bff521
@@ -114,4 +116,4 @@ primera vez que se accede a la URL del ALB que nos lleva a Jenkins.
         curl -H "Authorization: token YOUR_GITHUB_TOKEN" -L -o generate_terraform_plan.sh https://github.com/dancb/iacost/raw/main/generate_terraform_plan.sh
         curl -H "Authorization: token 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" -L -o generate_terraform_plan.sh https://github.com/dancb/iacost/raw/main/generate_terraform_plan.sh
 
-        
+    - Instalar el plugin Pipeline Stage View Plugin en Jenkins para que se vea el pipeline graficamente  
